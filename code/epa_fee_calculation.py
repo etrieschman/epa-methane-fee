@@ -186,8 +186,82 @@ pe['basin_num'] = pd.to_numeric(pe.basin.str.replace('[^0-9]', '', regex=True))
 # drop distribution category
 pe = pe.loc[pe.industry_segment != 'Natural gas distribution [98.230(a)(8)]']
 pe['applicable_emissions'] = pe.total_reported_ch4_emissions - pe.emission_threshold
-pe.loc[pe.emission_threshold == 0, 'applicable_emissions'] = pd.NA
+pe['applicable_emissions'] = np.where(pe.throughput == 0, pd.NA, pe.applicable_emissions)
+pe['report_gt25k'] = pe.total_reported_emissions > 25000
+cols = ['applicable_emissions', 'throughput', 'emission_threshold', 
+        'total_reported_emissions', 'total_reported_ch4_emissions']
+for col in cols:
+    pe[f'{col}_gt25k'] = np.where(pe.report_gt25k, pe[col], pd.NA)
 
+abr = epa_fee_units[['industry_segment', 'industry_segment_abr']].drop_duplicates()
+pe = pd.merge(left=pe.drop(columns='industry_segment_abr'), right=abr,
+              how='left', on='industry_segment')
+
+
+# %%
+def median_percentile(x):
+    if len(x.dropna()) > 0:
+        return np.percentile(x.dropna(), 50)
+    else:
+        return np.nan
+def iqr(x, round=2):
+    if len(x.dropna()) > 0:
+        # Calculate percentiles and round
+        lower_percentile = np.percentile(x.dropna(), 25).round(round)
+        upper_percentile = np.percentile(x.dropna(), 75).round(round)
+        # Format with commas
+        formatted_lower = '{:,}'.format(lower_percentile)
+        formatted_upper = '{:,}'.format(upper_percentile)
+
+        out = f'[{formatted_lower}-{formatted_upper}]'
+
+        return out
+    else:
+        return np.nan
+
+summ = (
+    pe
+    .loc[pe.reporting_year >= 2021]
+    .groupby(['industry_segment_abr', 'reporting_year'])
+    .agg(
+        n=('ghgrp_facility_id', 'count'),
+        n_gt25k=('report_gt25k','sum'),
+        med_te=('total_reported_emissions', lambda x: median_percentile(x)),
+        med_te_gt25=('total_reported_emissions_gt25k', lambda x: median_percentile(x)),
+        iqr_te_gt25=('total_reported_emissions_gt25k', lambda x: iqr(x)),
+        med_ch4e=('total_reported_ch4_emissions', lambda x: median_percentile(x)),
+        med_ch4e_gt25=('total_reported_ch4_emissions_gt25k', lambda x: median_percentile(x)),
+        iqr_ch4e_gt25=('total_reported_ch4_emissions_gt25k', lambda x: iqr(x)),
+        med_th=('emission_threshold', lambda x: median_percentile(x)),
+        med_th_gt25=('emission_threshold_gt25k', lambda x: median_percentile(x)),
+        iqr_th_gt25=('emission_threshold_gt25k', lambda x: iqr(x)),
+        med_ae=('applicable_emissions', lambda x: median_percentile(x)),
+        med_ae_gt25=('applicable_emissions_gt25k', lambda x: median_percentile(x)),
+        iqr_ae_gt25=('applicable_emissions_gt25k', lambda x: iqr(x)),
+    )
+    .reset_index()
+)
+summ.to_csv(PATH_RESULTS + 'df_summary_pctl.csv', index=False)
+
+# %%
+# Create a 3x3 grid of subplots
+var = 'total_reported_emissions'
+fig, axes = plt.subplots(3, 3, sharex=False, figsize=(10, 8))
+axes = axes.ravel()  # Flatten the array for easy indexing
+# Loop through segments and create a histogram for each
+for i, segment in enumerate(pe.industry_segment_abr.unique()):
+    # Select data for the segment
+    segment_data = pe[pe.industry_segment_abr == segment][var]
+    # Plot the histogram
+    axes[i].hist(segment_data.dropna(), bins=30, color=f'C{i}', density=True, alpha=0.8)
+    axes[i].axvline(x=25000, color='red', linestyle=':', linewidth=1)
+    axes[i].set_title(segment)
+    axes[i].set_yscale('log')
+axes[7].set_xlabel(var)
+
+# Adjust layout for clarity
+plt.tight_layout()
+plt.savefig(PATH_RESULTS + f'fig_hist_{var}', bbox_inches='tight', dpi=300)
 
 # %%
 # Get devon facilities
@@ -203,6 +277,7 @@ pe_dev = pd.merge(left=mf_dev, right=pe, how='left',
 print(pe_dev.groupby('merge_parent')['ghgrp_facility_id'].nunique())
 
 # %% 
+# SUMMARIZE DEVON OPERATIONS
 # MAP OF OPERATIONS
 import geopandas as gpd
 import matplotlib.pyplot as plt
@@ -213,7 +288,6 @@ gdf_states = gpd.read_file(PATH_DATA_RESOURCES + 'cb_state_boundaries/cb_2018_us
 gdf_states = gdf_states.loc[~gdf_states.STUSPS.isin(['HI', 'AK', 'PR'])]
 gdf_basins = gpd.read_file(PATH_DATA_RESOURCES + 'Basins_Shapefile/Basins_GHGRP.shp')
 
-# # MAP GENERATION
 # Convert the DataFrame to a GeoDataFrame
 gpe_dev = pe_dev.loc[pe_dev.reporting_year == year]
 gdf = gpd.GeoDataFrame(
@@ -237,7 +311,6 @@ plt.ylim((27, 42))
 plt.title(f'Company A operations in {year}')
 plt.show()
 
-# %%
 # SUMMARY OF OPERATIONS
 summ = pe_dev.loc[pe_dev.reporting_year == year, [
     'industry_segment_abr', 'basin_num',
