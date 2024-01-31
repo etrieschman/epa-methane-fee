@@ -1,5 +1,7 @@
 # Additional ignores
 results/
+data/raw/*
+data/processed/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
