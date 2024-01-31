@@ -12,3 +12,9 @@ downloaded from: https://enviro.epa.gov/query-builder/ghg/PETROLEUM%20AND%20NATU
 * Query builder: Petroleum and Natural Gas systems (2015-2022)
                  ef_w_facility_overview
                  all columns
+
+data table: ghgp_data_emissions_2015_2022.csv
+downloaded on: 1/30/24
+downloaded from: https://enviro.epa.gov/query-builder/ghg/PETROLEUM%20AND%20NATURAL%20GAS%20SYSTEMS%20(RY%202015-2022)
+* Query builder: Petroleum and Natural Gas systems (2015-2022)
+                 top table: EF_W_EMISSION_SOURCE_GHG
