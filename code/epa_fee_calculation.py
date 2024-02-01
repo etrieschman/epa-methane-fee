@@ -3,12 +3,19 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 from epa_fee_units import epa_fee_units
 
 # options
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', 100)
+
+# values
+# IPCC Assessment Report 6, Working Group I, Chapter 7 The Earth’s Energy Budget, Climate Feedbacks, and Climate Sensitivity
+# Section 7.6.1.1 Radiative Properties and Lifetimes, (Table 7.15, url)
+EF_CH4 = 29.8
+EF_N2O = 273
 
 # paths
 PATH_DATA = '../data/'
@@ -110,10 +117,11 @@ e_col = (
     .sum()
     .reset_index()
 )
+
 e_col['total_reported_emissions'] = (
     e_col.total_reported_co2_emissions.fillna(0) + 
-    e_col.total_reported_ch4_emissions.fillna(0) + 
-    e_col.total_reported_n2o_emissions.fillna(0)
+    e_col.total_reported_ch4_emissions.fillna(0)*EF_CH4 + 
+    e_col.total_reported_n2o_emissions.fillna(0)*EF_N2O
 )
 
 
@@ -159,7 +167,7 @@ choices_quant = [
 ]
 
 pu['throughput'] = np.select(conditions, choices_quant, default=pd.NA)
-pu['emission_threshold'] = pu.throughput * pu.waste_em_thresh * pu.unit_conversion
+pu['emission_threshold'] = pd.to_numeric(pu.throughput * pu.waste_em_thresh * pu.unit_conversion)
 pu_col = (
     pu.groupby([
         'ghgrp_facility_id', 'reporting_year', 
@@ -186,12 +194,12 @@ pe['basin_num'] = pd.to_numeric(pe.basin.str.replace('[^0-9]', '', regex=True))
 # drop distribution category
 pe = pe.loc[pe.industry_segment != 'Natural gas distribution [98.230(a)(8)]']
 pe['applicable_emissions'] = pe.total_reported_ch4_emissions - pe.emission_threshold
-pe['applicable_emissions'] = np.where(pe.throughput == 0, pd.NA, pe.applicable_emissions)
+pe['applicable_emissions'] = pd.to_numeric(np.where(pe.throughput == 0, pd.NA, pe.applicable_emissions))
 pe['report_gt25k'] = pe.total_reported_emissions > 25000
 cols = ['applicable_emissions', 'throughput', 'emission_threshold', 
         'total_reported_emissions', 'total_reported_ch4_emissions']
 for col in cols:
-    pe[f'{col}_gt25k'] = np.where(pe.report_gt25k, pe[col], pd.NA)
+    pe[f'{col}_gt25k'] = pd.to_numeric(np.where(pe.report_gt25k, pe[col], pd.NA))
 
 abr = epa_fee_units[['industry_segment', 'industry_segment_abr']].drop_duplicates()
 pe = pd.merge(left=pe.drop(columns='industry_segment_abr'), right=abr,
@@ -199,9 +207,20 @@ pe = pd.merge(left=pe.drop(columns='industry_segment_abr'), right=abr,
 
 
 # %%
+# GET OVERALL SUMMARIES
 def median_percentile(x):
     if len(x.dropna()) > 0:
         return np.percentile(x.dropna(), 50)
+    else:
+        return np.nan
+def mean_nan(x):
+    if len(x.dropna()) > 0:
+        return x.dropna().mean()
+    else:
+        return np.nan
+def std_nan(x):
+    if len(x.dropna()) > 0:
+        return x.dropna().std()
     else:
         return np.nan
 def iqr(x, round=2):
@@ -228,24 +247,49 @@ summ = (
         n_gt25k=('report_gt25k','sum'),
         med_te=('total_reported_emissions', lambda x: median_percentile(x)),
         med_te_gt25=('total_reported_emissions_gt25k', lambda x: median_percentile(x)),
-        iqr_te_gt25=('total_reported_emissions_gt25k', lambda x: iqr(x)),
+        std_te_gt25=('total_reported_emissions_gt25k', lambda x: iqr(x)),
         med_ch4e=('total_reported_ch4_emissions', lambda x: median_percentile(x)),
         med_ch4e_gt25=('total_reported_ch4_emissions_gt25k', lambda x: median_percentile(x)),
-        iqr_ch4e_gt25=('total_reported_ch4_emissions_gt25k', lambda x: iqr(x)),
+        std_ch4e_gt25=('total_reported_ch4_emissions_gt25k', lambda x: iqr(x)),
         med_th=('emission_threshold', lambda x: median_percentile(x)),
         med_th_gt25=('emission_threshold_gt25k', lambda x: median_percentile(x)),
-        iqr_th_gt25=('emission_threshold_gt25k', lambda x: iqr(x)),
+        std_th_gt25=('emission_threshold_gt25k', lambda x: iqr(x)),
         med_ae=('applicable_emissions', lambda x: median_percentile(x)),
         med_ae_gt25=('applicable_emissions_gt25k', lambda x: median_percentile(x)),
-        iqr_ae_gt25=('applicable_emissions_gt25k', lambda x: iqr(x)),
+        std_ae_gt25=('applicable_emissions_gt25k', lambda x: iqr(x)),
     )
     .reset_index()
 )
 summ.to_csv(PATH_RESULTS + 'df_summary_pctl.csv', index=False)
 
+summ = (
+    pe
+    .loc[pe.reporting_year >= 2021]
+    .groupby(['industry_segment_abr', 'reporting_year'])
+    .agg(
+        n=('ghgrp_facility_id', 'count'),
+        n_gt25k=('report_gt25k','sum'),
+        mean_te=('total_reported_emissions', lambda x: mean_nan(x)),
+        mean_te_gt25=('total_reported_emissions_gt25k', lambda x: mean_nan(x)),
+        iqr_te_gt25=('total_reported_emissions_gt25k', lambda x: std_nan(x)),
+        mean_ch4e=('total_reported_ch4_emissions', lambda x: mean_nan(x)),
+        mean_ch4e_gt25=('total_reported_ch4_emissions_gt25k', lambda x: mean_nan(x)),
+        iqr_ch4e_gt25=('total_reported_ch4_emissions_gt25k', lambda x: std_nan(x)),
+        mean_th=('emission_threshold', lambda x: mean_nan(x)),
+        mean_th_gt25=('emission_threshold_gt25k', lambda x: mean_nan(x)),
+        iqr_th_gt25=('emission_threshold_gt25k', lambda x: std_nan(x)),
+        mean_ae=('applicable_emissions', lambda x: mean_nan(x)),
+        mean_ae_gt25=('applicable_emissions_gt25k', lambda x: mean_nan(x)),
+        iqr_ae_gt25=('applicable_emissions_gt25k', lambda x: std_nan(x)),
+    )
+    .reset_index()
+)
+summ.to_csv(PATH_RESULTS + 'df_summary_meanstd.csv', index=False)
+
 # %%
+# PLOT DENSITIES
 # Create a 3x3 grid of subplots
-var = 'total_reported_emissions'
+var = 'applicable_emissions_gt25k'
 fig, axes = plt.subplots(3, 3, sharex=False, figsize=(10, 8))
 axes = axes.ravel()  # Flatten the array for easy indexing
 # Loop through segments and create a histogram for each
@@ -254,14 +298,39 @@ for i, segment in enumerate(pe.industry_segment_abr.unique()):
     segment_data = pe[pe.industry_segment_abr == segment][var]
     # Plot the histogram
     axes[i].hist(segment_data.dropna(), bins=30, color=f'C{i}', density=True, alpha=0.8)
-    axes[i].axvline(x=25000, color='red', linestyle=':', linewidth=1)
+    # axes[i].axvline(x=25000, color='red', linestyle=':', linewidth=1)
     axes[i].set_title(segment)
-    axes[i].set_yscale('log')
+    # axes[i].set_xscale('log')
 axes[7].set_xlabel(var)
 
 # Adjust layout for clarity
 plt.tight_layout()
 plt.savefig(PATH_RESULTS + f'fig_hist_{var}', bbox_inches='tight', dpi=300)
+
+# %%
+# PLOT BOXPLOTS
+# Create a 3x3 grid of subplots
+year = 2022
+gt25k = False
+suff = '_gt25k' if gt25k else ''
+vars = {f'total_reported_ch4_emissions{suff}':'total_ch4',
+        f'emission_threshold{suff}':'thresh', f'applicable_emissions{suff}':'applicable'}
+fig, axes = plt.subplots(3,3, sharex=True, figsize=(10, 8))
+axes = axes.ravel()
+df = pe.loc[pe.reporting_year == year]
+# Loop through segments and create a histogram for each
+for i, segment in enumerate(pe.industry_segment_abr.unique()):
+    # Select data for the segment
+    segment_data = df.loc[df.industry_segment_abr == segment]
+    # Plot the histogram
+    if len(segment_data) == 0:
+        continue
+    segment_data[vars.keys()].rename(columns=vars).boxplot(ax=axes[i], showfliers=False)
+    axes[i].set_title(segment)
+
+# Adjust layout for clarity
+plt.tight_layout()
+plt.savefig(PATH_RESULTS + f'fig_box{suff}', bbox_inches='tight', dpi=300)
 
 # %%
 # Get devon facilities
