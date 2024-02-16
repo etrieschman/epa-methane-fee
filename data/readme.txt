@@ -19,3 +19,10 @@ downloaded on: 1/30/24
 downloaded from: https://enviro.epa.gov/query-builder/ghg/PETROLEUM%20AND%20NATURAL%20GAS%20SYSTEMS%20(RY%202015-2022)
 * Query builder: Petroleum and Natural Gas systems (2015-2022)
                  top table: EF_W_EMISSION_SOURCE_GHG
+
+data tables:    hh_ann_waste_disposal_qty.csv
+                hh_landfill_info.csv
+                hh_subpart_level_information.csv
+downloaded on:  2/16/24
+downloaded from:https://enviro.epa.gov/query-builder/ghg/MUNICIPAL%20SOLID%20WASTE%20LANDFILLS
+* Query builder:Municipal Solid Waste Landfills
