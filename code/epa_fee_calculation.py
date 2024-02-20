@@ -22,7 +22,7 @@ PATH_DATA = '../data/'
 PATH_DATA_RAW = PATH_DATA + 'raw/'
 PATH_DATA_PROCESSED = PATH_DATA + 'processed/'
 PATH_DATA_RESOURCES = PATH_DATA + 'resources/'
-PATH_RESULTS = '../results/readin_data/'
+PATH_RESULTS = '../results/w_summary/'
 rpath = Path(PATH_RESULTS)
 rpath.mkdir(parents=True, exist_ok=True)
 
