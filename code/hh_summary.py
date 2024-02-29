@@ -58,9 +58,11 @@ summ = (ew.groupby(['reporting_year'])['total_emissions']
             pctl50=lambda x: np.percentile(x, 50),
             pctl75=lambda x: np.percentile(x, 75),
             max='max'
-        ).style.format('{:,.2f}'))
-display(summ)
-# plot
+        ))
+display(summ.style.format('{:,.2f}'))
+
+
+# boxplot
 fig, axl = plt.subplots()
 axr = axl.twinx()
 grouped = ew.groupby('reporting_year')['total_emissions']
@@ -83,6 +85,38 @@ axl.set_xlabel('reporting year')
 plt.title('subpart HH reported emissions')
 plt.legend()
 plt.show()
+
+# Percentiles chart
+fig, ax = plt.subplots(nrows=3, sharex=True, figsize=(5,7))
+summ_p = (ew.groupby(['reporting_year'])['total_emissions']
+        .agg(
+            p05=lambda x: np.percentile(x, 5),
+            p10=lambda x: np.percentile(x, 10),
+            p20=lambda x: np.percentile(x, 20),
+            p30=lambda x: np.percentile(x, 30),
+            p40=lambda x: np.percentile(x, 40),
+            p50=lambda x: np.percentile(x, 50),
+            p60=lambda x: np.percentile(x, 60),
+            p70=lambda x: np.percentile(x, 70),
+            p80=lambda x: np.percentile(x, 80),
+            p90=lambda x: np.percentile(x, 90),
+            p95=lambda x: np.percentile(x, 95))
+)
+ax[1].axhline(y=0, linestyle=':', linewidth=1, color='black')
+ax[2].axhline(y=0, linestyle=':', linewidth=1, color='black')
+summ_p.plot(cmap='Reds', linewidth=1, alpha=0.75, ax=ax[0], legend=False)
+summ_p2010 = summ_p / summ_p.iloc[0] - 1
+summ_p2010.plot(cmap='Reds', linewidth=1, alpha=0.75, ax=ax[1])
+summ_ppct = summ_p / summ_p.shift(1) - 1
+summ_ppct.plot(cmap='Reds', linewidth=1, alpha=0.75, ax=ax[2], legend=False)
+ax[0].set_facecolor('lightgrey')
+ax[1].set_facecolor('lightgrey')
+ax[2].set_facecolor('lightgrey')
+ax[1].legend(bbox_to_anchor=(1,1.5), facecolor='lightgrey')
+ax[0].set_title('Landfill emissions percentiles')
+ax[0].set_ylabel('Landfill emissions\n(tCO2e)')
+ax[1].set_ylabel('% change\nfrom 2010')
+ax[2].set_ylabel('% change\nfrom previous year')
 
 # %%
 # READIN DATA
@@ -120,7 +154,50 @@ qwc = (
     [['total_waste_disposal_qty_ry']]
     .mean().reset_index()
     .rename(columns={'waste_disp_reporting_year':'reporting_year'}))
-qwc
+
+qwc_e = pd.merge(left=ew, right=qwc, how='inner', 
+                 on=['facility_id', 'reporting_year'],
+                 indicator=True)
+qwc_e['em_per_waste'] = np.where(qwc_e.total_waste_disposal_qty_ry == 0, np.nan, qwc_e.total_emissions / qwc_e.total_waste_disposal_qty_ry)
+summ = qwc_e.groupby(['reporting_year']).agg(
+    total_waste=('total_waste_disposal_qty_ry', 'sum'),
+    # mean_emissions_per_waste=('total_waste_disposal_qty_ry', 'mean'),
+    p05=('total_waste_disposal_qty_ry', lambda x: np.percentile(x.dropna(), 5)),
+    p10=('total_waste_disposal_qty_ry', lambda x: np.percentile(x.dropna(), 10)),
+    p20=('total_waste_disposal_qty_ry', lambda x: np.percentile(x.dropna(), 20)),
+    p30=('total_waste_disposal_qty_ry', lambda x: np.percentile(x.dropna(), 30)),
+    p40=('total_waste_disposal_qty_ry', lambda x: np.percentile(x.dropna(), 40)),
+    p50=('total_waste_disposal_qty_ry', lambda x: np.percentile(x.dropna(), 50)),
+    p60=('total_waste_disposal_qty_ry', lambda x: np.percentile(x.dropna(), 60)),
+    p70=('total_waste_disposal_qty_ry', lambda x: np.percentile(x.dropna(), 70)),
+    p80=('total_waste_disposal_qty_ry', lambda x: np.percentile(x.dropna(), 80)),
+    p90=('total_waste_disposal_qty_ry', lambda x: np.percentile(x.dropna(), 90)),
+    p95=('total_waste_disposal_qty_ry', lambda x: np.percentile(x.dropna(), 95)))
+
+# Percentiles chart
+fig, ax = plt.subplots(nrows=2, sharex=True, figsize=(5,4))
+ax0r = ax[0].twinx()
+ax[1].axhline(y=0, linestyle=':', linewidth=1, color='black')
+# ax[2].axhline(y=0, linestyle=':', linewidth=1, color='black')
+summ.drop(columns='total_waste').plot(cmap='Blues', linewidth=1, alpha=0.75, ax=ax[0], legend=False)
+ax0r.plot(summ.total_waste, color='C3', label='Total waste')
+summ2010 = summ / summ.iloc[0] - 1
+summ2010.drop(columns='total_waste').plot(cmap='Blues', linewidth=1, alpha=0.75, ax=ax[1])
+ax[1].plot(summ2010.total_waste, color='C3')
+# summpct = summ / summ.shift(1) - 1
+# summpct.plot(cmap='Blues', linewidth=1, alpha=0.75, ax=ax[2], legend=False)
+ax[0].set_facecolor('lightgrey')
+ax[1].set_facecolor('lightgrey')
+ax0r.legend()
+# ax[2].set_facecolor('lightgrey')
+ax[1].legend(bbox_to_anchor=(1.1,2), facecolor='lightgrey')
+ax[0].set_title('Waste disposal quantity percentiles')
+ax[0].set_ylabel('Waste disposal\nquantity (t)')
+ax[1].set_ylabel('% change\nfrom 2010')
+# ax[2].set_ylabel('% change\nfrom previous year')
+plt.show()
+
+display(summ.drop(columns=['p20', 'p30', 'p40', 'p60', 'p70', 'p80']).style.format('{:,.2f}'))
 
 # %%
 # MERGE DATA
