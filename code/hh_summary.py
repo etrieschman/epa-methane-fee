@@ -319,4 +319,35 @@ summ = (
         })
 )
 summ.to_csv(PATH_RESULTS + 'df_characteristics_by_reporting_cat.csv')
+
+
+# %%
+# Biggest bang for EPA's buck
+year = 2010
+sort_var = 'total_waste_disposal_qty_ry'
+# sort_var = 'total_emissions'
+# sort_var = 'landfill_capacity'
+df = elq.loc[elq.reporting_year == year].sort_values(by=sort_var, ascending=False)
+df['total_emissions_cumpct'] = (df['total_emissions'].cumsum() / df['total_emissions'].sum()) * 100
+df['counter'] = True
+df['cumpct_has_clct'] = df.has_gas_clct.cumsum() / df.counter.cumsum() * 100
+colors = df['has_gas_clct'].map({True: 'C0', False: 'C1'})
+
+# plot
+fig, axl = plt.subplots(figsize=(8,5))
+axr = axl.twinx()
+axr.plot(np.arange(len(df)), df.total_emissions_cumpct.values, color='black', alpha=0.75, linewidth=1, label='% of total emisisons up to this point')
+axr.plot(np.arange(len(df)), df.cumpct_has_clct.values, color='purple', alpha=0.75, linewidth=1, label='% of landfills with gas collectors up to this point')
+axl.bar(x=np.arange(len(df)), height=df[sort_var].values, width = 1, color=colors, alpha=0.5)
+axr.set_xticks(np.arange(0, len(df), 100))
+axl.set_yscale('log')
+plt.legend(bbox_to_anchor=(0.2, 0.2))
+# labels
+plt.title(f'Landfills in {year}, sorted by {sort_var}\n% of total emissions and % with gas collectors')
+axl.set_ylabel(sort_var)
+axr.set_ylabel('Percent (%)')
+axl.set_xlabel(f'Landfills sorted by {sort_var}\nBlue=has gas collector; Orange=does not')
+
+
+
 # %%
