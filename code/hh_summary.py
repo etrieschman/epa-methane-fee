@@ -324,9 +324,9 @@ summ.to_csv(PATH_RESULTS + 'df_characteristics_by_reporting_cat.csv')
 # %%
 # Biggest bang for EPA's buck
 year = 2010
-sort_var = 'total_waste_disposal_qty_ry'
+# sort_var = 'total_waste_disposal_qty_ry'
 # sort_var = 'total_emissions'
-# sort_var = 'landfill_capacity'
+sort_var = 'landfill_capacity'
 df = elq.loc[elq.reporting_year == year].sort_values(by=sort_var, ascending=False)
 df['total_emissions_cumpct'] = (df['total_emissions'].cumsum() / df['total_emissions'].sum()) * 100
 df['counter'] = True
@@ -350,4 +350,28 @@ axl.set_xlabel(f'Landfills sorted by {sort_var}\nBlue=has gas collector; Orange=
 
 
 
+# %%
+# SUMMARIZE BIGGEST BANG IN TABLE FORM
+# Define size categories
+
+denom = 1e6
+size_bins_dict = {
+    'total_emissions':[0, 1e4, 2.5e4, 5e4, 1e5, 5e5, 1e6, 1e7],
+    'landfill_capacity':[0, 1e5, 5e5, 1e6, 2.5e6, 5e6, 1e7, 5e7, 1e8, 5e8, 1e9],
+    'total_waste_disposal_qty_ry':[0, 499, 799, np.inf]
+}
+size_bins = size_bins_dict[sort_var]
+size_labels = [f'{left/denom:,.2f} - {(right-1)/denom:,.2f}' for left, right in zip(size_bins[:-1], size_bins[1:])]
+elq[f'{sort_var}_cat'] = pd.cut(elq[sort_var], bins=size_bins, labels=size_labels)
+
+summ = (elq.loc[elq.reporting_year == 2022]
+        .groupby(['reporting_year', f'{sort_var}_cat'])
+        .agg({'facility_id':['count'],
+            'total_emissions':['sum', 'mean'],
+              'has_gas_clct':['mean']}))
+summ[('total_emissions', 'sum_pct')] = (
+    summ.reset_index()[('total_emissions', 'sum')].values / 
+    summ.reset_index().groupby('reporting_year')[[('total_emissions', 'sum')]].transform('sum').values.flatten())
+summ = summ[summ.columns.sort_values()]
+summ
 # %%
