@@ -363,6 +363,26 @@ for year in tqdm(years):
     for sort_var, yscale in zip(sort_vars, yscales):
         plot_sorted_landfills(elq, sort_var, year, yscale)
 
+# %%
+# Spot check outlier facilities
+year = 2022
+sort_var = 'landfill_capacity'
+df = elq.loc[elq.reporting_year == year].sort_values(by=sort_var, ascending=False)
+# largest 5 facilities without a gas collector
+df = df.loc[~df.has_gas_clct].iloc[:5].set_index('facility_id')
+keep_cols = [
+    'facility_name', 'is_landfill_open',
+    'yrs_from_open', 'yrs_until_close', 
+    'total_emissions',
+    'landfill_capacity',  'lndfil_surface_containing_wste',
+    'total_waste_disposal_qty_ry',
+    'has_gas_clct', 'is_leachate_recirculation_used',
+    'has_passive_vents_or_flares', 'has_scales',
+]
+df = df[keep_cols].T
+df.to_csv(PATH_RESULTS + f'df_top5_nogasclct_{year}.csv', index=True)
+
+
 
 # %%
 # SUMMARIZE BIGGEST BANG IN TABLE FORM
